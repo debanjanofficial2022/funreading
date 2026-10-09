@@ -60,19 +60,25 @@ scripts/                regenerate the example project from scripts/catalogue-so
 ### 1. Supabase
 1. Create a project at [supabase.com](https://supabase.com).
 2. In **SQL Editor**, run `supabase/schema.sql`, then `supabase/seed.sql`.
-3. In **Authentication → URL Configuration**, set **Site URL** to your website's address and add it under **Redirect URLs** (do this again once you have your Vercel URL or custom domain).
-4. In **Project Settings → API**, copy the Project URL, the `anon` public key and the `service_role` key.
+3. Turn on sign-in with Google and GitHub in **Authentication → Sign In / Providers** (see "Sign-in providers" below). Until one is on, the site falls back to emailed sign-in links.
+4. In **Authentication → URL Configuration**, set **Site URL** to your website's address and add it under **Redirect URLs** (do this again once you have your Vercel URL or custom domain).
+5. In **Project Settings → API**, copy the Project URL, the `anon` public key and the `service_role` key.
 
 ### 2. Vercel
 1. Import this repository at [vercel.com/new](https://vercel.com/new). Vercel detects Vite.
 2. Connect Supabase: either add Supabase from the project's **Storage/Integrations** tab (Vercel fills in the keys itself), or add `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` by hand (see `.env.example`). The integration's variable names work too. Only the two `VITE_` values reach the browser. Never give the service-role key a `VITE_` prefix.
-3. Deploy, then put the URL into Supabase's Site URL (step 1.3).
+3. Deploy, then put the URL into Supabase's Site URL (step 1.4).
 
 ### 3. Claude features (optional)
 "Build rings with Claude" and quizzes are off until you add an Anthropic key. Without it, the site hides them and the functions refuse requests.
 1. Create an API key at [console.anthropic.com](https://console.anthropic.com) and set a monthly spend limit.
 2. In Vercel → Settings → Environment Variables, add `ANTHROPIC_API_KEY`. That turns on ring building. To also turn on quizzes, add `QUIZZES=on`.
 3. Redeploy. Each ring build is one Claude request; readers share a daily limit (`AI_USER_DAILY_LIMIT`, default 10 each, `AI_GLOBAL_DAILY_LIMIT`, default 300 for the site).
+
+### Sign-in providers
+Supabase's callback address is `https://<your-project-ref>.supabase.co/auth/v1/callback`.
+- **GitHub:** GitHub → Settings → Developer settings → OAuth Apps → New OAuth App. Homepage URL: your site. Authorization callback URL: the Supabase callback. Copy the Client ID and a new Client secret into Supabase → Authentication → Sign In / Providers → GitHub, and enable it.
+- **Google:** Google Cloud Console → APIs & Services. Set up the OAuth consent screen (External), then Credentials → Create credentials → OAuth client ID → Web application. Authorized JavaScript origins: your site. Authorized redirect URIs: the Supabase callback. Copy the Client ID and secret into Supabase → Google, and enable it.
 
 ### Google Scholar and Consensus
 Google Scholar has no public API, so the site opens your search in Scholar in a new tab. Consensus does have a paid API (per-call pricing on top of a Consensus plan); the site currently opens your search on consensus.app. Searching inside the site uses OpenAlex, which is free.

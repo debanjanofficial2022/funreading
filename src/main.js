@@ -5,7 +5,7 @@ import { computeGame, XP } from "./game.js";
 
 /* ============ setup ============ */
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL, SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const sb = SUPA_URL && SUPA_KEY ? createClient(SUPA_URL, SUPA_KEY) : null;
+const sb = SUPA_URL && SUPA_KEY ? createClient(SUPA_URL, SUPA_KEY, { auth: { flowType: "pkce", detectSessionInUrl: true } }) : null;
 // Optional features, switched on by the server (see /api/config): AI ring building and quizzes.
 let QUIZ = false, AI = false;
 const $ = id => document.getElementById(id);
@@ -650,10 +650,34 @@ $("signin-form").onsubmit = async e => {
   e.preventDefault();
   const email = $("signin-email").value.trim(), msg = $("signin-msg"), btn = e.target.querySelector("button");
   btn.disabled = true;
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname + location.hash } });
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
   btn.disabled = false;
   msg.textContent = error ? "Couldn't send the link: " + error.message : `Check ${email} for your sign-in link. You can close this.`;
 };
+// Sign in with Google or GitHub. Only providers switched on in Supabase are shown; with none, an email link is offered instead.
+const PROVIDERS = [["google", "Continue with Google"], ["github", "Continue with GitHub"]];
+let enabledProviders = null;
+async function openSignin() {
+  $("signin-msg").textContent = "";
+  sdlg.showModal();
+  if (!enabledProviders) {
+    try {
+      const r = await fetch(SUPA_URL + "/auth/v1/settings", { headers: { apikey: SUPA_KEY } });
+      const ext = (await r.json()).external || {};
+      enabledProviders = PROVIDERS.filter(([k]) => ext[k]);
+    } catch { enabledProviders = []; }
+  }
+  const box = $("signin-providers");
+  box.innerHTML = enabledProviders.map(([k, l]) => `<button class="btn primary oauth" type="button" data-provider="${k}">${l}</button>`).join("");
+  $("signin-form").hidden = enabledProviders.length > 0;
+  if (!enabledProviders.length) $("signin-msg").textContent = "No password needed. We'll email you a link that signs you in.";
+  box.querySelectorAll("[data-provider]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { sessionStorage.setItem("fr-return", location.hash); } catch {}
+    const { error } = await sb.auth.signInWithOAuth({ provider: b.dataset.provider, options: { redirectTo: location.origin + location.pathname } });
+    if (error) { b.disabled = false; $("signin-msg").textContent = "Couldn't start sign-in: " + error.message; }
+  });
+}
 
 /* ============ events ============ */
 document.addEventListener("click", async e => {
@@ -661,7 +685,7 @@ document.addEventListener("click", async e => {
   const act = b.dataset.act, id = b.dataset.id, proj = projectById(route().id);
   const paper = id && proj && A.papers[proj.id] ? A.papers[proj.id].find(p => p.id === id) : null;
   if (act === "read" || act === "move") return; // handled on change
-  if (act === "signin") { if (sb) { $("signin-msg").textContent = "No password needed. We'll email you a link that signs you in."; sdlg.showModal(); } return; }
+  if (act === "signin") { if (sb) openSignin(); return; }
   if (act === "signout") { await sb.auth.signOut(); return; }
   if (act === "jump") { e.preventDefault(); const el = $(b.dataset.id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   if (act === "conf" && paper) return setConfidence(paper, b.dataset.v);
@@ -760,6 +784,11 @@ async function start() {
   if (sb) {
     const { data } = await sb.auth.getSession();
     A.session = data.session;
+    // back from Google/GitHub: drop the ?code from the address and return to the page the reader was on
+    if (location.search.includes("code=") || location.search.includes("error")) {
+      let back = ""; try { back = sessionStorage.getItem("fr-return") || ""; sessionStorage.removeItem("fr-return"); } catch {}
+      history.replaceState(null, "", location.pathname + (back || location.hash));
+    }
     if (A.session) { try { await loadAccount(); } catch { toast("Couldn't load your account. Showing what's saved in this browser."); } }
     sb.auth.onAuthStateChange(async (event, s) => {
       if (event === "SIGNED_IN" && (!A.session || A.session.user.id !== s.user.id)) {
