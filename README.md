@@ -2,7 +2,7 @@
 
 Turn a reading list into a game. Readers build **projects** for any topic, add papers by **DOI** or **PDF upload**, set **daily and weekly goals**, and earn **scholar points** (XP) as they read, keep streaks, unlock badges and pass quizzes on each paper. Every project is drawn as a set of concentric rings, one per section, filling in as you read.
 
-The example project, **Electrocatalysis Must-Reads** (196 papers in six rings), is always available. Guests can browse it and track progress in their browser; signing in keeps progress in their account and unlocks their own projects and quizzes.
+The example project, **Electrocatalysis Must-Reads** (196 papers in six rings), is always available. There is no sign-in: anyone can open the site and start their own projects straight away.
 
 ## Features
 
