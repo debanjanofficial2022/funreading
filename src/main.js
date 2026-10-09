@@ -473,7 +473,8 @@ async function findPapers(q) {
         journal: (w.primary_location && w.primary_location.source && w.primary_location.source.display_name) || "",
         authors: au.length > 4 ? au.slice(0, 3).join(", ") + " et al." : au.join(", "), cites: w.cited_by_count || 0 };
     });
-    A.view.find = { items };
+    const seen = new Set();
+    A.view.find = { items: items.filter(w => { const k = normTitle(w.title); if (seen.has(k)) return false; seen.add(k); return true; }) };
   } catch { A.view.find = { error: "Couldn't reach the paper index. Try again in a moment.", items: [] }; }
   drawFind();
 }
