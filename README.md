@@ -62,7 +62,7 @@ scripts/                regenerate the example project from scripts/catalogue-so
 
 ### 2. Vercel
 1. Import this repository at [vercel.com/new](https://vercel.com/new). Vercel detects Vite.
-2. Add `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (see `.env.example`). Only the two `VITE_` values reach the browser. Never give the service-role key a `VITE_` prefix.
+2. Connect Supabase: either add Supabase from the project's **Storage/Integrations** tab (Vercel fills in the keys itself), or add `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` by hand (see `.env.example`). The integration's variable names work too. Only the two `VITE_` values reach the browser. Never give the service-role key a `VITE_` prefix.
 3. Deploy, then put the URL into Supabase's Site URL (step 1.3).
 
 ### 3. Quizzes (optional, later)
