@@ -1,11 +1,12 @@
 // POST /api/quiz-check  { quizId, answers:[index,...] }
 // Grades on the server and records the result, so quiz points can't be awarded from the browser.
 import { admin, readBody, userFrom, paperFor } from "../lib/server.js";
+import { quizzesOn } from "../lib/ai.js";
 import { PASS_FRACTION } from "../lib/quiz.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "quizzes are turned off on this site" });
+  if (!quizzesOn()) return res.status(503).json({ error: "quizzes are turned off on this site" });
   const user = await userFrom(req);
   if (!user) return res.status(401).json({ error: "sign in required" });
   const body = readBody(req);

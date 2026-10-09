@@ -6,8 +6,8 @@ import { computeGame, XP } from "./game.js";
 /* ============ setup ============ */
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL, SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const sb = SUPA_URL && SUPA_KEY ? createClient(SUPA_URL, SUPA_KEY) : null;
-// Quizzes are off unless the site sets VITE_QUIZZES=true (and the server has ANTHROPIC_API_KEY).
-const QUIZ = import.meta.env.VITE_QUIZZES === "true" && !!sb;
+// Optional features, switched on by the server (see /api/config): AI ring building and quizzes.
+let QUIZ = false, AI = false;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const EX = EXAMPLE_PROJECT.id;
@@ -21,7 +21,7 @@ const A = {
   papers: { [EX]: EXAMPLE_PAPERS }, // project id → papers (loaded on demand)
   index: new Map(),             // paper id → {project_id, section}, for every paper the reader can see
   reads: new Map(),             // paper id → read row
-  view: { q: "", star: false, hide: false, confirm: null, addTab: "doi" },
+  view: { q: "", star: false, hide: false, confirm: null, addTab: "find", findQ: "", find: null },
   game: null,
 };
 EXAMPLE_PAPERS.forEach(p => A.index.set(p.id, { project_id: EX, section: p.section }));
@@ -130,7 +130,6 @@ const via = (u, ext) => (proxy.on && proxy.prefix && !ext ? proxy.prefix + u : u
 
 /* ============ views ============ */
 const app = $("app");
-if (QUIZ) $("quiz-foot").hidden = false;
 function route() {
   const m = location.hash.match(/^#\/p\/([0-9a-f-]{36})/i);
   return m ? { name: "project", id: m[1] } : { name: "home" };
@@ -209,6 +208,7 @@ function renderHome() {
           <label for="np-name">Name<input id="np-name" required maxlength="120" placeholder="e.g. Single-atom catalysis"></label>
           <label for="np-desc">Description<input id="np-desc" maxlength="500" placeholder="What is this reading list for?"></label>
           <label for="np-secs">Sections, one per line<textarea id="np-secs" rows="3" placeholder="Foundations&#10;Key papers&#10;Recent work"></textarea></label>
+          ${AI ? `<label class="note" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="np-ai" style="width:auto;margin:0" checked> Have Claude suggest rings and papers from the name and description</label>` : ""}
           <button class="btn primary" type="submit">Create project</button></form></div>`
       : sb ? `<div class="card pcard newproj"><div class="eyebrow">New project</div><h3>Start your own</h3><p>Sign in to create projects, add papers by DOI or PDF${QUIZ ? ", and take quizzes" : ""}.</p><button class="btn primary" data-act="signin">Sign in</button></div>` : ""}
     </div>
@@ -242,8 +242,13 @@ async function renderProject(id) {
   const secOptions = sel => secs.map(s => `<option value="${esc(s.id)}"${s.id === sel ? " selected" : ""}>${esc(s.name)}</option>`).join("");
 
   const addPanel = own ? `<details class="panel" id="addpanel"${papers.length ? "" : " open"}><summary>Add papers</summary><div class="panel-body">
-      <div class="tabs">${[["doi", "By DOI"], ["pdf", "Upload PDFs"], ["manual", "Type it in"]].map(([k, l]) => `<button class="chip sm" data-act="tab" data-tab="${k}" aria-pressed="${v.addTab === k}">${l}</button>`).join("")}</div>
+      <div class="tabs">${[["find", "Search"], ["doi", "By DOI"], ["pdf", "Upload PDFs"], ["manual", "Type it in"]].map(([k, l]) => `<button class="chip sm" data-act="tab" data-tab="${k}" aria-pressed="${v.addTab === k}">${l}</button>`).join("")}</div>
       <label for="add-sec">Add to section<select id="add-sec">${secOptions(secs[0]?.id)}</select></label>
+      <div class="${v.addTab === "find" ? "" : "hidden"} stack">
+        <form id="find-form" class="findrow"><input type="search" id="find-q" value="${esc(v.findQ || "")}" placeholder="Title, topic or author, e.g. cobalt phthalocyanine CO2 reduction" aria-label="Search for papers"><button class="btn primary" type="submit">Search</button></form>
+        <div class="cta"><span class="note">Also search in:</span><button class="btn sm" data-act="ext" data-to="scholar">Google Scholar ↗</button><button class="btn sm" data-act="ext" data-to="consensus">Consensus ↗</button></div>
+        <div id="find-results" class="results">${findResultsHtml(proj)}</div>
+        <p class="note">Results come from OpenAlex, a free index of scholarly papers. Found something on Scholar or Consensus? Copy its DOI into “By DOI”.</p></div>
       <div class="${v.addTab === "doi" ? "" : "hidden"} stack"><label for="doi-box">DOIs or DOI links, one per line<textarea id="doi-box" rows="4" placeholder="10.1021/jacs.7b06765&#10;https://doi.org/10.1038/s41586-019-1760-8"></textarea></label><div><button class="btn primary" data-act="add-dois">Look up and add</button></div></div>
       <div class="${v.addTab === "pdf" ? "" : "hidden"} stack"><div class="drop" id="drop" tabindex="0" role="button">Drop PDFs here or click to choose. We read the DOI from each PDF and fill in the details.</div><input type="file" id="pdf-input" accept="application/pdf" multiple hidden><p class="note">Up to 25 MB each. Your PDFs are private to your account${QUIZ ? " and make quizzes more accurate" : ""}.</p></div>
       <form id="manual" class="${v.addTab === "manual" ? "" : "hidden"} form3">
@@ -286,6 +291,7 @@ async function renderProject(id) {
       <div class="pstats"><div class="stat"><b>${nRead}<small> / ${papers.length}</small></b><span>papers read</span></div>${QUIZ ? `<div class="stat"><b>${nQuiz}</b><span>quizzes passed</span></div>` : ""}<div class="stat"><b>${papers.filter(p => p.essential).length}</b><span>★ essentials</span></div></div></div>
       <div class="ringmap">${ringMap(proj, papers)}</div></div>
     ${banner}
+    ${own && AI ? `<div class="banner ai"><span><b>Build rings with Claude.</b> ${papers.length >= 3 ? "Sort the papers you have into rings, or add rings and papers for a topic." : "Describe a topic and Claude will suggest rings and real papers to start with."}</span><button class="btn primary" data-act="ai-rings">✦ Build rings</button></div>` : ""}
     <div class="tools">${firstPass}${addPanel}${editPanel}</div>
     <div class="controls"><input type="search" id="q" value="${esc(v.q)}" placeholder="Search this project…" aria-label="Search this project">
       <button class="chip" data-act="star" aria-pressed="${v.star}">★ Essentials only</button><button class="chip" data-act="hide" aria-pressed="${v.hide}">Hide read</button>
@@ -434,6 +440,157 @@ async function copyExample() {
   location.hash = "#/p/" + proj.id;
 }
 
+/* ============ finding papers (OpenAlex, plus links out to Scholar and Consensus) ============ */
+const normTitle = t => String(t || "").toLowerCase().replace(/<[^>]+>/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+function inProject(proj, w) {
+  const ps = A.papers[proj.id] || [];
+  return ps.some(p => (w.doi && p.doi && p.doi.toLowerCase() === w.doi.toLowerCase()) || normTitle(p.title) === normTitle(w.title));
+}
+function findResultsHtml(proj) {
+  const f = A.view.find;
+  if (!f) return "";
+  if (f.loading) return `<p class="note">Searching…</p>`;
+  if (f.error) return `<p class="note">${esc(f.error)}</p>`;
+  if (!f.items.length) return `<p class="note">No papers found. Try fewer or different words.</p>`;
+  return f.items.map((w, i) => {
+    const have = inProject(proj, w);
+    return `<div class="result"><div style="min-width:0"><div class="rtitle">${esc(w.title)}</div><div class="meta"><span>${esc(w.authors)}</span><span>${esc(w.journal)} ${w.year || ""}</span>${w.cites ? `<span>${w.cites.toLocaleString()} citations</span>` : ""}${w.doi ? `<span class="doi">doi:${esc(w.doi)}</span>` : ""}</div></div>
+      ${have ? `<span class="note">In project</span>` : `<button class="btn sm" data-act="find-add" data-i="${i}">Add</button>`}</div>`;
+  }).join("");
+}
+async function findPapers(q) {
+  A.view.findQ = q;
+  if (q.length < 3) { toast("Type a few words to search."); return; }
+  A.view.find = { loading: true, items: [] }; drawFind();
+  try {
+    const u = new URL("https://api.openalex.org/works");
+    u.searchParams.set("search", q.slice(0, 250)); u.searchParams.set("per-page", "15");
+    u.searchParams.set("select", "doi,title,publication_year,authorships,primary_location,cited_by_count");
+    const r = await fetch(u); if (!r.ok) throw new Error();
+    const items = ((await r.json()).results || []).filter(w => w.title).map(w => {
+      const au = (w.authorships || []).map(a => (a.author && a.author.display_name || "").split(" ").pop()).filter(Boolean);
+      return { title: w.title.replace(/<[^>]+>/g, ""), year: w.publication_year || null, doi: (w.doi || "").replace(/^https?:\/\/doi\.org\//i, "") || null,
+        journal: (w.primary_location && w.primary_location.source && w.primary_location.source.display_name) || "",
+        authors: au.length > 4 ? au.slice(0, 3).join(", ") + " et al." : au.join(", "), cites: w.cited_by_count || 0 };
+    });
+    A.view.find = { items };
+  } catch { A.view.find = { error: "Couldn't reach the paper index. Try again in a moment.", items: [] }; }
+  drawFind();
+}
+function drawFind() { const el = $("find-results"), proj = projectById(route().id); if (el && proj) el.innerHTML = findResultsHtml(proj); }
+async function addFound(proj, i, btn) {
+  const w = A.view.find && A.view.find.items[i]; if (!w) return;
+  btn.disabled = true; btn.textContent = "Adding…";
+  const added = await addPaper(proj, { title: w.title, authors: w.authors, journal: w.journal, year: w.year, doi: w.doi }, true);
+  if (added) toast(`Added <b>${esc(w.title.slice(0, 60))}</b>`);
+  render();
+}
+
+/* ============ building rings with Claude ============ */
+const rdlg = $("rings");
+let ringsToken = 0;
+$("rings-close").onclick = () => { ringsToken++; rdlg.close(); };
+rdlg.addEventListener("close", () => { ringsToken++; });
+function openRings(proj, mode, topic, autorun) {
+  const n = (A.papers[proj.id] || []).length;
+  if (mode === "organize" && n < 3) mode = "topic";
+  $("rings-title").textContent = proj.name;
+  const body = $("rings-body");
+  body.innerHTML = `<div class="tabs"><button class="chip sm" data-rmode="organize" aria-pressed="${mode === "organize"}" ${n >= 3 ? "" : "disabled title=\"Add at least 3 papers first\""}>Sort my ${n} papers</button><button class="chip sm" data-rmode="topic" aria-pressed="${mode === "topic"}">Start from a topic</button></div>
+    <div id="r-topic" class="stack ${mode === "topic" ? "" : "hidden"}">
+      <label for="r-topic-in">Topic<textarea id="r-topic-in" rows="3" maxlength="1500" placeholder="e.g. Electrochemical CO2 reduction to methanol on molecular catalysts">${esc(topic || "")}</textarea></label>
+      <label for="r-level">Who's reading (optional)<input id="r-level" maxlength="200" placeholder="e.g. first-year PhD student in catalysis"></label>
+      <p class="note">Claude suggests rings and papers. Each paper is then looked up in OpenAlex and Crossref, and any that can't be found are dropped.</p></div>
+    <p id="r-org" class="note ${mode === "organize" ? "" : "hidden"}">Claude will group your papers into rings from foundations to frontier, label topics, star the essentials and pick a first pass. You'll see a preview before anything changes.</p>
+    <div class="cta"><button class="btn primary" id="r-go">Build rings</button></div>
+    <div id="r-out" role="status"></div>`;
+  rdlg.dataset.mode = mode;
+  body.querySelectorAll("[data-rmode]").forEach(c => c.onclick = () => {
+    rdlg.dataset.mode = c.dataset.rmode;
+    body.querySelectorAll("[data-rmode]").forEach(x => x.setAttribute("aria-pressed", x === c));
+    $("r-topic").classList.toggle("hidden", c.dataset.rmode !== "topic"); $("r-org").classList.toggle("hidden", c.dataset.rmode !== "organize");
+    $("r-out").innerHTML = "";
+  });
+  $("r-go").onclick = () => runRings(proj);
+  if (!rdlg.open) rdlg.showModal();
+  if (autorun && (topic || "").length >= 3) runRings(proj);
+}
+async function runRings(proj) {
+  const my = ++ringsToken, mode = rdlg.dataset.mode, out = $("r-out"), go = $("r-go");
+  const topic = mode === "topic" ? $("r-topic-in").value.trim() : "";
+  if (mode === "topic" && topic.length < 3) { out.innerHTML = `<p class="note">Describe the topic in a few words.</p>`; return; }
+  go.disabled = true;
+  out.innerHTML = `<p class="note">Claude is working on it. ${mode === "topic" ? "Building rings and checking every paper takes a minute or two." : "This takes up to a minute."}</p>`;
+  let res;
+  try { res = await api("/api/rings", { projectId: proj.id, mode, topic, level: mode === "topic" ? $("r-level").value.trim() : "" }); } catch { res = { ok: false, status: 0, data: {} }; }
+  if (my !== ringsToken) return;
+  go.disabled = false;
+  const d = res.data || {};
+  if (res.status === 401) { out.innerHTML = `<p>Your sign-in has expired. Sign in again.</p>`; return; }
+  if (res.status === 429) { out.innerHTML = `<p>${d.reason === "global" ? "The site has reached today's limit for Claude requests. Please try again tomorrow." : "You've used today's Claude requests. They reset tomorrow."}</p>`; return; }
+  if (!res.ok) { out.innerHTML = `<p>${esc(d.error || "Couldn't build rings this time.")}</p>`; return; }
+  rdlg._preview = d;
+  out.innerHTML = mode === "organize" ? previewOrganize(proj, d) : previewTopic(proj, d);
+  const apply = $("r-apply"); if (apply) apply.onclick = () => applyRings(proj, d, apply);
+}
+function previewOrganize(proj, d) {
+  const ps = A.papers[proj.id] || [], byId = new Map(ps.map(p => [p.id, p]));
+  return `<div class="rprev">${d.rings.map((r, i) => {
+    const items = d.assign.filter(a => a.ring === i);
+    return `<div class="rring"><div class="eyebrow">Ring ${ROMAN[i] || i + 1} · ${items.length} paper${items.length === 1 ? "" : "s"}</div><h4>${esc(r.name)}</h4>${r.sub ? `<p class="note">${esc(r.sub)}</p>` : ""}
+      <ul>${items.slice(0, 5).map(a => `<li>${a.essential ? "★ " : ""}${esc((byId.get(a.id) || {}).title || "")}</li>`).join("")}${items.length > 5 ? `<li class="note">and ${items.length - 5} more</li>` : ""}</ul></div>`;
+  }).join("")}</div>
+  ${d.firstPass && d.firstPass.length ? `<p class="note">First pass: ${d.firstPass.length} paper${d.firstPass.length === 1 ? "" : "s"} in reading order.</p>` : ""}
+  <div class="cta"><button class="btn primary" id="r-apply">Use these rings</button><span class="note">Replaces this project's sections, topics and stars. Your reading progress is kept.</span></div>`;
+}
+function previewTopic(proj, d) {
+  const n = (A.papers[proj.id] || []).length;
+  if (!d.rings.length) return `<p>None of Claude's suggestions could be found in OpenAlex or Crossref, so nothing was added. Try a more specific topic.</p>`;
+  return `<p class="note">${d.verified} of ${d.suggested} suggested papers were found in OpenAlex or Crossref and are shown with their real details. ${d.suggested - d.verified ? `${d.suggested - d.verified} couldn't be found and were dropped.` : ""} Untick any you don't want.</p>
+  <div class="rprev">${d.rings.map((r, i) => `<div class="rring"><div class="eyebrow">Ring ${ROMAN[i] || i + 1}</div><h4>${esc(r.name)}</h4>${r.blurb ? `<p class="note">${esc(r.blurb)}</p>` : ""}
+    ${r.papers.map((p, j) => `<label class="rpaper"><input type="checkbox" data-rp="${i}-${j}" checked><span><b>${p.essential ? "★ " : ""}${esc(p.title)}</b><span class="meta"><span>${esc(p.authors)}</span><span>${esc(p.journal)} ${p.year || ""}</span></span>${p.note ? `<span class="why">${esc(p.note)}</span>` : ""}</span></label>`).join("")}</div>`).join("")}</div>
+  <div class="cta"><button class="btn primary" id="r-apply">Add to project</button><span class="note">${n ? "Adds these as new rings after your current ones." : "Sets up this project's rings."}</span></div>`;
+}
+async function applyRings(proj, d, btn) {
+  btn.disabled = true; btn.textContent = "Saving…";
+  const uid = A.session.user.id, stamp = Date.now().toString(36);
+  const newSecs = d.rings.map((r, i) => ({ id: `r${stamp}${i}`, name: r.name, sub: r.sub || "", blurb: r.blurb || "" }));
+  try {
+    if (d.mode === "organize") {
+      const ps = A.papers[proj.id] || [], byId = new Map(ps.map(p => [p.id, p]));
+      const rows = d.assign.filter(a => byId.has(a.id)).map(a => ({ ...byId.get(a.id), section: newSecs[a.ring].id, topic: a.topic || "", essential: !!a.essential }));
+      for (let i = 0; i < rows.length; i += 100) {
+        const { error } = await sb.from("papers").upsert(rows.slice(i, i + 100), { onConflict: "id" });
+        if (error) throw error;
+      }
+      const meta = { ...(proj.meta || {}), firstPass: d.firstPass || [] };
+      const { error } = await sb.from("projects").update({ sections: newSecs, meta, updated_at: new Date().toISOString() }).eq("id", proj.id);
+      if (error) throw error;
+      proj.sections = newSecs; proj.meta = meta;
+    } else {
+      const picked = new Set([...$("r-out").querySelectorAll("input[data-rp]:checked")].map(x => x.dataset.rp));
+      const ps = A.papers[proj.id] || [];
+      const keep = newSecs.map((s, i) => ({ s, papers: d.rings[i].papers.filter((p, j) => picked.has(`${i}-${j}`) && !inProject(proj, p)) })).filter(x => x.papers.length);
+      if (!keep.length) { btn.disabled = false; btn.textContent = "Add to project"; toast("Nothing new to add."); return; }
+      const sections = ps.length ? [...(proj.sections || []), ...keep.map(x => x.s)] : keep.map(x => x.s);
+      const { error } = await sb.from("projects").update({ sections, updated_at: new Date().toISOString() }).eq("id", proj.id);
+      if (error) throw error;
+      proj.sections = sections;
+      let pos = ps.length;
+      const rows = keep.flatMap(x => x.papers.map(p => ({ project_id: proj.id, owner: uid, title: p.title, authors: p.authors || "", journal: p.journal || "", year: p.year || null, doi: p.doi || null,
+        section: x.s.id, topic: p.topic || "", note: p.note || "", essential: !!p.essential, position: pos++ })));
+      const { error: e2 } = await sb.from("papers").insert(rows);
+      if (e2) throw e2;
+    }
+    delete A.papers[proj.id]; await loadPapers(proj.id);
+    rdlg.close(); regame(false); render();
+    toast(d.mode === "organize" ? "Your project now has new rings." : "Added the new rings and papers.");
+  } catch (e) {
+    btn.disabled = false; btn.textContent = "Try saving again";
+    toast(esc((e && e.message) || "Couldn't save the rings."));
+  }
+}
+
 /* ============ server calls ============ */
 async function api(path, body) {
   const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + A.session.access_token }, body: JSON.stringify(body) });
@@ -526,6 +683,9 @@ document.addEventListener("click", async e => {
     inp.click(); return;
   }
   if (act === "add-dois") return addDois(proj);
+  if (act === "ext") { const q = ($("find-q") && $("find-q").value.trim()) || ""; window.open((b.dataset.to === "scholar" ? "https://scholar.google.com/scholar?q=" : "https://consensus.app/results/?q=") + encodeURIComponent(q), "_blank", "noopener"); return; }
+  if (act === "find-add" && proj) return addFound(proj, Number(b.dataset.i), b);
+  if (act === "ai-rings" && proj) return openRings(proj, (A.papers[proj.id] || []).length >= 3 ? "organize" : "topic", [proj.name, proj.description].filter(Boolean).join(". "), false);
   if (act === "del") { A.view.confirm = "del-" + id; return render(); }
   if (act === "del-yes" && paper) {
     A.view.confirm = null;
@@ -580,14 +740,17 @@ document.addEventListener("change", async e => {
   if (t.id === "proxy-on") { proxy.on = t.checked; ls.set("rr-proxy", proxy); return; }
 });
 document.addEventListener("submit", async e => {
+  if (e.target.id === "find-form") { e.preventDefault(); return findPapers($("find-q").value.trim()); }
   if (e.target.id !== "newproj") return;
   e.preventDefault();
   const names = $("np-secs").value.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 12);
   const sections = (names.length ? names : ["Papers"]).map((n, i) => ({ id: "s" + (i + 1), name: n.slice(0, 80) }));
   const { data, error } = await sb.from("projects").insert({ owner: A.session.user.id, name: $("np-name").value.trim(), description: $("np-desc").value.trim(), sections }).select().single();
   if (error) { toast(esc(error.message)); return; }
-  A.projects.push(data); A.papers[data.id] = []; A.view.addTab = "doi";
+  A.projects.push(data); A.papers[data.id] = []; A.view.addTab = "find"; A.view.find = null; A.view.findQ = "";
+  const useAi = AI && $("np-ai") && $("np-ai").checked;
   location.hash = "#/p/" + data.id;
+  if (useAi) openRings(data, "topic", [data.name, data.description].filter(Boolean).join(". "), true);
 });
 window.addEventListener("hashchange", () => { A.view.confirm = null; A.view.q = ""; render(); window.scrollTo(0, 0); });
 
@@ -611,5 +774,13 @@ async function start() {
     });
   }
   A.ready = true; regame(false); render();
+  if (sb) {
+    try {
+      const cfg = await fetch("/api/config").then(r => (r.ok ? r.json() : {}));
+      QUIZ = !!cfg.quizzes; AI = !!cfg.ai;
+      $("quiz-foot").hidden = !QUIZ; $("ai-foot").hidden = !AI;
+      if (QUIZ || AI) { regame(false); render(); }
+    } catch {}
+  }
 }
 start();

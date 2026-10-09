@@ -3,31 +3,15 @@
 // is paid for once and then served free. New quizzes count against daily per-reader and site limits.
 import { admin, readBody, userFrom, paperFor, pdfBytes, pdfText } from "../lib/server.js";
 import { quizPrompt, validQuestions } from "../lib/quiz.js";
+import { MODEL, quizzesOn, spendOne, askClaude } from "../lib/ai.js";
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
-const USER_DAILY = parseInt(process.env.QUIZ_USER_DAILY_LIMIT || "10", 10);
-const GLOBAL_DAILY = parseInt(process.env.QUIZ_GLOBAL_DAILY_LIMIT || "300", 10);
 const MAX_SETS = 5;
 
 const strip = qs => qs.map(q => ({ q: q.q, options: q.options }));
 
-async function askClaude(prompt) {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 2500, messages: [{ role: "user", content: prompt }] }),
-  });
-  if (!r.ok) throw new Error("anthropic " + r.status);
-  const out = await r.json();
-  const text = (out.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-  const a = text.indexOf("{"), b = text.lastIndexOf("}");
-  if (a < 0 || b < a) throw new Error("no json");
-  return JSON.parse(text.slice(a, b + 1));
-}
-
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "quizzes are turned off on this site" });
+  if (!quizzesOn()) return res.status(503).json({ error: "quizzes are turned off on this site" });
   const user = await userFrom(req);
   if (!user) return res.status(401).json({ error: "sign in required" });
   const body = readBody(req);
@@ -48,9 +32,8 @@ export default async function handler(req, res) {
   }
   if (!usable.length && matching.length && matching[0].questions?.unknown) return res.status(200).json({ unknown: true });
 
-  const day = new Date().toISOString().slice(0, 10);
-  const { data: verdict, error } = await db.rpc("bump_quiz_usage", { p_user: user.id, p_day: day, p_user_limit: USER_DAILY, p_global_limit: GLOBAL_DAILY });
-  if (error) return res.status(500).json({ error: "usage check failed" });
+  let verdict;
+  try { verdict = await spendOne(user.id); } catch { return res.status(500).json({ error: "usage check failed" }); }
   if (verdict !== "ok") return res.status(429).json({ reason: verdict });
 
   try {

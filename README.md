@@ -1,4 +1,4 @@
-# Reading Rings
+# Fun Reading
 
 Turn a reading list into a game. Readers build **projects** for any topic, add papers by **DOI** or **PDF upload**, set **daily and weekly goals**, and earn **scholar points** (XP) as they read, keep streaks, unlock badges and pass quizzes on each paper. Every project is drawn as a set of concentric rings, one per section, filling in as you read.
 
@@ -7,6 +7,8 @@ The example project, **Electrocatalysis Must-Reads** (196 papers in six rings), 
 ## Features
 
 - **Projects:** create as many as you like (up to 50), with your own sections. Rename, reorder and delete sections; move papers between them.
+- **Finding papers:** search a free index of scholarly papers (OpenAlex) right in the project and add results with one click, or jump to the same search in Google Scholar or Consensus.
+- **Build rings with Claude (optional):** Claude sorts a project's papers into rings from foundations to frontier, with topics, essentials and a first pass, or proposes rings and papers for a topic. Every suggested paper is looked up in OpenAlex or Crossref and dropped if it can't be found. You see a preview before anything changes.
 - **Adding papers:** paste any number of DOIs (looked up in Crossref), drop in PDFs (the DOI is read from the PDF and checked against Crossref by title), or type details by hand.
 - **Reading:** tick papers as read, rate your understanding (still fuzzy, mostly, confident), and open each paper's PDF and supporting information through its DOI, optionally through your library's proxy. Uploaded PDFs are private to you.
 - **Quizzes (optional, off by default):** when turned on, marking yourself confident unlocks a 5-question quiz written by Claude. With an uploaded PDF the quiz is written from the paper's own text; otherwise from what Claude knows about the paper. Answers are graded on the server.
@@ -31,7 +33,8 @@ Points are computed from each reader's reading history, so they're the same on e
 | Website | Vercel (static Vite build) | Free tier |
 | Accounts, projects, progress, private PDFs | Supabase (email sign-in links, Postgres with row-level security, Storage) | Free tier to start |
 | Reading DOIs from PDFs | Vercel function `api/pdf-meta.js` with Crossref | Free |
-| Quizzes (optional) | Vercel functions in `api/`, calling the Anthropic API with your key | Pay per new quiz |
+| Paper search | OpenAlex, from the browser | Free |
+| Ring building and quizzes (optional) | Vercel functions in `api/`, calling the Anthropic API with your key | Pay per request |
 
 ```
 index.html, src/        the app (dashboard, projects, ring maps, quizzes)
@@ -65,10 +68,14 @@ scripts/                regenerate the example project from scripts/catalogue-so
 2. Connect Supabase: either add Supabase from the project's **Storage/Integrations** tab (Vercel fills in the keys itself), or add `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` by hand (see `.env.example`). The integration's variable names work too. Only the two `VITE_` values reach the browser. Never give the service-role key a `VITE_` prefix.
 3. Deploy, then put the URL into Supabase's Site URL (step 1.3).
 
-### 3. Quizzes (optional, later)
-Quizzes are off until you turn them on. With them off, the site hides every quiz button and badge, and the quiz functions refuse requests. To turn them on:
+### 3. Claude features (optional)
+"Build rings with Claude" and quizzes are off until you add an Anthropic key. Without it, the site hides them and the functions refuse requests.
 1. Create an API key at [console.anthropic.com](https://console.anthropic.com) and set a monthly spend limit.
-2. In Vercel, add `ANTHROPIC_API_KEY` and `VITE_QUIZZES=true`, then redeploy (the `VITE_` value is read at build time).
+2. In Vercel → Settings → Environment Variables, add `ANTHROPIC_API_KEY`. That turns on ring building. To also turn on quizzes, add `QUIZZES=on`.
+3. Redeploy. Each ring build is one Claude request; readers share a daily limit (`AI_USER_DAILY_LIMIT`, default 10 each, `AI_GLOBAL_DAILY_LIMIT`, default 300 for the site).
+
+### Google Scholar and Consensus
+Google Scholar has no public API, so the site opens your search in Scholar in a new tab. Consensus does have a paid API (per-call pricing on top of a Consensus plan); the site currently opens your search on consensus.app. Searching inside the site uses OpenAlex, which is free.
 
 ## Run locally
 

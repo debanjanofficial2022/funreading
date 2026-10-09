@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/rings.js": { "maxDuration": 180 },
+    "api/quiz.js": { "maxDuration": 90 },
+    "api/pdf-meta.js": { "maxDuration": 60 }
+  }
+}

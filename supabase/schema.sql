@@ -1,4 +1,4 @@
--- Reading Rings database. Run once in Supabase (SQL Editor → New query → paste → Run),
+-- Fun Reading database. Run once in Supabase (SQL Editor → New query → paste → Run),
 -- then run seed.sql to add the example project.
 
 create extension if not exists pgcrypto;

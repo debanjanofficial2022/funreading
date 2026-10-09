@@ -1,4 +1,4 @@
-/* Reading Rings. Layout: a top bar, then either the dashboard (level, goals, badges, projects)
+/* Fun Reading. Layout: a top bar, then either the dashboard (level, goals, badges, projects)
    or a project (ring map of its sections, then the sections as lists of papers). */
 :root{
   --bg:#f2f4f7; --surface:#ffffff; --ink:#151d27; --muted:#5a6676; --line:#d8dee7;
@@ -195,3 +195,20 @@ dialog::backdrop{background:rgba(10,14,20,.55)}
 @media (max-width:480px){.g2{grid-template-columns:minmax(0,1fr)} .xp-pill .lvl-name{display:none}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 html{scroll-behavior:smooth}
+
+/* search and the Claude ring builder */
+.banner.ai{background:var(--accent-soft)}
+.findrow{display:flex;gap:8px}
+.findrow input{flex:1;min-width:0;margin:0}
+.results{display:flex;flex-direction:column;gap:2px;max-height:460px;overflow:auto}
+.result{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--line)}
+.result .btn{flex:none}
+.rtitle{font-weight:600;font-size:14px;line-height:1.35}
+.rprev{display:flex;flex-direction:column;gap:14px;margin:12px 0}
+.rring{border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.rring h4{font-family:var(--display);font-size:18px;margin:2px 0}
+.rring ul{margin:6px 0 0;padding-left:18px;font-size:14px}
+.rpaper{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.rpaper input{width:auto;margin:3px 0 0;flex:none}
+.rpaper > span{display:flex;flex-direction:column;min-width:0}
+#r-out .note{margin-top:8px}
