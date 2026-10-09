@@ -6,6 +6,8 @@ import { computeGame, XP } from "./game.js";
 /* ============ setup ============ */
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL, SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const sb = SUPA_URL && SUPA_KEY ? createClient(SUPA_URL, SUPA_KEY) : null;
+// Quizzes are off unless the site sets VITE_QUIZZES=true (and the server has ANTHROPIC_API_KEY).
+const QUIZ = import.meta.env.VITE_QUIZZES === "true" && !!sb;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const EX = EXAMPLE_PROJECT.id;
@@ -40,7 +42,7 @@ function regame(announce = true) {
     const d = A.game.xp - before.xp;
     if (d > 0) toast(`<b>+${d} XP</b> · ${esc(d >= XP.quiz ? "Quiz passed" : A.game.today >= A.game.daily && before.today < before.daily ? "Daily goal met" : "Paper read")}`);
     if (A.game.level.n > before.level.n) toast(`Level up! You're now a <b>${esc(A.game.level.name)}</b>.`, "level");
-    for (const b of A.game.badges) if (b.earned && !before.badges.find(x => x.id === b.id).earned) toast(`Badge unlocked: <b>${esc(b.name)}</b>`);
+    for (const b of shownBadges(A.game)) if (b.earned && !before.badges.find(x => x.id === b.id).earned) toast(`Badge unlocked: <b>${esc(b.name)}</b>`);
   }
   drawTop();
 }
@@ -128,6 +130,7 @@ const via = (u, ext) => (proxy.on && proxy.prefix && !ext ? proxy.prefix + u : u
 
 /* ============ views ============ */
 const app = $("app");
+if (QUIZ) $("quiz-foot").hidden = false;
 function route() {
   const m = location.hash.match(/^#\/p\/([0-9a-f-]{36})/i);
   return m ? { name: "project", id: m[1] } : { name: "home" };
@@ -169,17 +172,18 @@ function projectCard(p) {
     <div class="bar"><i style="width:${pct}%"></i></div>
     <div class="row"><span>${rd} read</span><span>${pct}%</span></div></a>`;
 }
+const shownBadges = g => QUIZ ? g.badges : g.badges.filter(b => !b.id.startsWith("quiz"));
 function renderHome() {
   const g = A.game;
   const guestNote = !sb ? `<p class="note">Accounts aren't configured on this copy of the site, so your progress is saved in this browser only.</p>`
-    : !signedIn() ? `<p class="note">You're reading as a guest, so progress is saved in this browser only. <button class="linkbtn" data-act="signin">Sign in</button> to create your own projects, take quizzes and keep your progress everywhere.</p>` : "";
+    : !signedIn() ? `<p class="note">You're reading as a guest, so progress is saved in this browser only. <button class="linkbtn" data-act="signin">Sign in</button> to create your own projects${QUIZ ? ", take quizzes" : ""} and keep your progress everywhere.</p>` : "";
   const landing = signedIn() ? "" : `
     <section class="landing">
       <div>
         <div class="eyebrow">Literature, gamified</div>
         <h1>Turn your reading list into a <em>game</em></h1>
-        <p class="lede">Build a project for any topic, add papers by DOI or PDF, and work through them ring by ring. Set daily and weekly goals, keep your streak, pass quizzes on what you read, and earn scholar points as you level up from curious reader to distinguished professor.</p>
-        <ol class="steps"><li><span>Open the example project, <b>Electrocatalysis Must-Reads</b>, to see how it works.</span></li><li><span>Sign in and start your own project. Paste DOIs or drop in PDFs.</span></li><li><span>Tick papers as you read them, then prove it with a quiz.</span></li></ol>
+        <p class="lede">Build a project for any topic, add papers by DOI or PDF, and work through them ring by ring. Set daily and weekly goals, keep your streak, ${QUIZ ? "pass quizzes on what you read, " : ""}and earn scholar points as you level up from curious reader to distinguished professor.</p>
+        <ol class="steps"><li><span>Open the example project, <b>Electrocatalysis Must-Reads</b>, to see how it works.</span></li><li><span>Sign in and start your own project. Paste DOIs or drop in PDFs.</span></li><li><span>Tick papers as you read them${QUIZ ? ", then prove it with a quiz" : " and rate how well you understood each one"}.</span></li></ol>
         <div class="cta"><a class="btn primary" href="#/p/${EX}">Open the example project</a>${sb ? `<button class="btn" data-act="signin">Sign in or create an account</button>` : ""}</div>
       </div>
       <div class="ringmap">${ringMap(EXAMPLE_PROJECT, EXAMPLE_PAPERS)}</div>
@@ -193,9 +197,9 @@ function renderHome() {
       <div class="card level stat"><div class="eyebrow">Level ${lv.n}</div><div class="lvname">${esc(lv.name)}</div><div class="bar"><i style="width:${pct}%"></i></div><span>${g.xp} XP${lv.next ? ` · ${toNext} to ${esc(lv.next.name)}` : " · top level"}</span></div>
       <div class="card stat"><div class="eyebrow">Today</div><b>${g.today}<small> / ${g.daily}</small></b><div class="bar"><i style="width:${Math.min(100, 100 * g.today / g.daily)}%"></i></div><span>${g.today >= g.daily ? `Daily goal met · +${XP.dailyGoal} XP` : `${g.daily - g.today} to go for +${XP.dailyGoal} XP`}</span></div>
       <div class="card stat"><div class="eyebrow">This week</div><b>${g.week}<small> / ${g.weekly}</small></b><div class="bar"><i style="width:${Math.min(100, 100 * g.week / g.weekly)}%"></i></div><span>${g.week >= g.weekly ? `Weekly goal met · +${XP.weeklyGoal} XP` : `${g.weekly - g.week} to go for +${XP.weeklyGoal} XP`}</span></div>
-      <div class="card stat"><div class="eyebrow">Streak</div><b>${g.streak}<small> day${g.streak === 1 ? "" : "s"}</small></b><span>Best: ${g.best} · ${g.nRead} read · ${g.nQuiz} quiz${g.nQuiz === 1 ? "" : "zes"} passed</span></div>
+      <div class="card stat"><div class="eyebrow">Streak</div><b>${g.streak}<small> day${g.streak === 1 ? "" : "s"}</small></b><span>Best: ${g.best} · ${g.nRead} read${QUIZ ? ` · ${g.nQuiz} quiz${g.nQuiz === 1 ? "" : "zes"} passed` : ""}</span></div>
     </div>
-    <p class="note">How points work: ${XP.read} XP per paper read, ${XP.quiz} per quiz passed, ${XP.dailyGoal} for each day you meet your daily goal, ${XP.weeklyGoal} for each week you meet your weekly goal.</p>
+    <p class="note">How points work: ${XP.read} XP per paper read, ${QUIZ ? `${XP.quiz} per quiz passed, ` : ""}${XP.dailyGoal} for each day you meet your daily goal, ${XP.weeklyGoal} for each week you meet your weekly goal.</p>
 
     <div class="section-title"><div><div class="eyebrow">Your reading</div><h2>Projects</h2></div></div>
     <div class="grid g3">
@@ -206,11 +210,11 @@ function renderHome() {
           <label for="np-desc">Description<input id="np-desc" maxlength="500" placeholder="What is this reading list for?"></label>
           <label for="np-secs">Sections, one per line<textarea id="np-secs" rows="3" placeholder="Foundations&#10;Key papers&#10;Recent work"></textarea></label>
           <button class="btn primary" type="submit">Create project</button></form></div>`
-      : sb ? `<div class="card pcard newproj"><div class="eyebrow">New project</div><h3>Start your own</h3><p>Sign in to create projects, add papers by DOI or PDF, and take quizzes.</p><button class="btn primary" data-act="signin">Sign in</button></div>` : ""}
+      : sb ? `<div class="card pcard newproj"><div class="eyebrow">New project</div><h3>Start your own</h3><p>Sign in to create projects, add papers by DOI or PDF${QUIZ ? ", and take quizzes" : ""}.</p><button class="btn primary" data-act="signin">Sign in</button></div>` : ""}
     </div>
 
-    <div class="section-title"><div><div class="eyebrow">Achievements</div><h2>Badges</h2></div><span class="note">${g.badges.filter(b => b.earned).length} of ${g.badges.length} earned</span></div>
-    <div class="badges">${g.badges.map((b, i) => `<div class="badge${b.earned ? "" : " locked"}">${BADGE_ICON(b.earned, i)}<div><b>${esc(b.name)}</b><span>${esc(b.desc)}${b.earned ? "" : ` · ${b.progress}/${b.need}`}</span></div></div>`).join("")}</div>
+    ${(() => { const bs = shownBadges(g); return `<div class="section-title"><div><div class="eyebrow">Achievements</div><h2>Badges</h2></div><span class="note">${bs.filter(b => b.earned).length} of ${bs.length} earned</span></div>
+    <div class="badges">${bs.map((b, i) => `<div class="badge${b.earned ? "" : " locked"}">${BADGE_ICON(b.earned, i)}<div><b>${esc(b.name)}</b><span>${esc(b.desc)}${b.earned ? "" : ` · ${b.progress}/${b.need}`}</span></div></div>`).join("")}</div>`; })()}
 
     <div class="section-title"><div><div class="eyebrow">Settings</div><h2>Off-campus access</h2></div></div>
     <div class="card stack">
@@ -241,7 +245,7 @@ async function renderProject(id) {
       <div class="tabs">${[["doi", "By DOI"], ["pdf", "Upload PDFs"], ["manual", "Type it in"]].map(([k, l]) => `<button class="chip sm" data-act="tab" data-tab="${k}" aria-pressed="${v.addTab === k}">${l}</button>`).join("")}</div>
       <label for="add-sec">Add to section<select id="add-sec">${secOptions(secs[0]?.id)}</select></label>
       <div class="${v.addTab === "doi" ? "" : "hidden"} stack"><label for="doi-box">DOIs or DOI links, one per line<textarea id="doi-box" rows="4" placeholder="10.1021/jacs.7b06765&#10;https://doi.org/10.1038/s41586-019-1760-8"></textarea></label><div><button class="btn primary" data-act="add-dois">Look up and add</button></div></div>
-      <div class="${v.addTab === "pdf" ? "" : "hidden"} stack"><div class="drop" id="drop" tabindex="0" role="button">Drop PDFs here or click to choose. We read the DOI from each PDF and fill in the details.</div><input type="file" id="pdf-input" accept="application/pdf" multiple hidden><p class="note">Up to 25 MB each. Your PDFs are private to your account and make quizzes more accurate.</p></div>
+      <div class="${v.addTab === "pdf" ? "" : "hidden"} stack"><div class="drop" id="drop" tabindex="0" role="button">Drop PDFs here or click to choose. We read the DOI from each PDF and fill in the details.</div><input type="file" id="pdf-input" accept="application/pdf" multiple hidden><p class="note">Up to 25 MB each. Your PDFs are private to your account${QUIZ ? " and make quizzes more accurate" : ""}.</p></div>
       <form id="manual" class="${v.addTab === "manual" ? "" : "hidden"} form3">
         <label class="wide" for="m-title">Title<input id="m-title" required maxlength="500"></label>
         <label for="m-auth">Authors<input id="m-auth" maxlength="1000"></label><label for="m-jour">Journal<input id="m-jour" maxlength="200"></label><label for="m-year">Year<input id="m-year" type="number" min="1600" max="2200"></label>
@@ -279,7 +283,7 @@ async function renderProject(id) {
 
   app.innerHTML = `<p class="crumb"><a href="#/">← All projects</a></p>
     <div class="phead"><div>${proj.is_template ? '<span class="tag example">EXAMPLE PROJECT</span>' : '<span class="tag mine">MY PROJECT</span>'}<h1>${esc(proj.name)}</h1>${proj.description ? `<p class="lede">${esc(proj.description)}</p>` : ""}
-      <div class="pstats"><div class="stat"><b>${nRead}<small> / ${papers.length}</small></b><span>papers read</span></div><div class="stat"><b>${nQuiz}</b><span>quizzes passed</span></div><div class="stat"><b>${papers.filter(p => p.essential).length}</b><span>★ essentials</span></div></div></div>
+      <div class="pstats"><div class="stat"><b>${nRead}<small> / ${papers.length}</small></b><span>papers read</span></div>${QUIZ ? `<div class="stat"><b>${nQuiz}</b><span>quizzes passed</span></div>` : ""}<div class="stat"><b>${papers.filter(p => p.essential).length}</b><span>★ essentials</span></div></div></div>
       <div class="ringmap">${ringMap(proj, papers)}</div></div>
     ${banner}
     <div class="tools">${firstPass}${addPanel}${editPanel}</div>
@@ -295,7 +299,8 @@ function paperRow(p, proj, own, secOptions) {
   const confirm = v.confirm === "del-" + p.id;
   const conf = r ? r.confidence : null, chip = (val, l) => `<button class="chip sm" data-act="conf" data-id="${p.id}" data-v="${val}" aria-pressed="${conf === val}">${l}</button>`;
   let quiz = "";
-  if (r && conf === "high") {
+  if (!QUIZ) quiz = "";
+  else if (r && conf === "high") {
     if (!sb) quiz = `<span class="note">Quizzes need an account on a configured site.</span>`;
     else if (!signedIn()) quiz = `<button class="linkbtn" data-act="signin">Sign in to take the quiz</button>`;
     else if (r.quiz_passed) quiz = `<span class="passed">Quiz passed · best ${r.quiz_best}/${r.quiz_n}</span><button class="btn sm" data-act="quiz" data-id="${p.id}" data-fresh="1">Retake</button>`;
@@ -503,7 +508,7 @@ document.addEventListener("click", async e => {
   if (act === "signout") { await sb.auth.signOut(); return; }
   if (act === "jump") { e.preventDefault(); const el = $(b.dataset.id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   if (act === "conf" && paper) return setConfidence(paper, b.dataset.v);
-  if (act === "quiz" && paper) return openQuiz(paper, !!b.dataset.fresh);
+  if (act === "quiz" && paper && QUIZ) return openQuiz(paper, !!b.dataset.fresh);
   if (act === "star" || act === "hide") { A.view[act] = !A.view[act]; return render(); }
   if (act === "tab") { A.view.addTab = b.dataset.tab; return render(); }
   if (act === "cancel") { A.view.confirm = null; return render(); }

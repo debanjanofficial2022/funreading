@@ -27,6 +27,7 @@ async function askClaude(prompt) {
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: "quizzes are turned off on this site" });
   const user = await userFrom(req);
   if (!user) return res.status(401).json({ error: "sign in required" });
   const body = readBody(req);

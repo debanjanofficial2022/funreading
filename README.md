@@ -9,7 +9,7 @@ The example project, **Electrocatalysis Must-Reads** (196 papers in six rings), 
 - **Projects:** create as many as you like (up to 50), with your own sections. Rename, reorder and delete sections; move papers between them.
 - **Adding papers:** paste any number of DOIs (looked up in Crossref), drop in PDFs (the DOI is read from the PDF and checked against Crossref by title), or type details by hand.
 - **Reading:** tick papers as read, rate your understanding (still fuzzy, mostly, confident), and open each paper's PDF and supporting information through its DOI, optionally through your library's proxy. Uploaded PDFs are private to you.
-- **Quizzes:** mark yourself confident to unlock a 5-question quiz written by Claude. With an uploaded PDF the quiz is written from the paper's own text; otherwise from what Claude knows about the paper. Answers are graded on the server.
+- **Quizzes (optional, off by default):** when turned on, marking yourself confident unlocks a 5-question quiz written by Claude. With an uploaded PDF the quiz is written from the paper's own text; otherwise from what Claude knows about the paper. Answers are graded on the server.
 - **Game:** XP, ten levels from "Curious reader" to "Distinguished professor", daily and weekly goal bonuses, streaks and 13 badges.
 - **Example project:** "Make my own copy" turns it into an editable project.
 
@@ -18,7 +18,7 @@ The example project, **Electrocatalysis Must-Reads** (196 papers in six rings), 
 | Action | XP |
 |---|---|
 | Read a paper | 10 |
-| Pass a quiz (4 of 5 correct) | 50 |
+| Pass a quiz (4 of 5 correct, only when quizzes are on) | 50 |
 | Meet your daily goal (per day) | 20 |
 | Meet your weekly goal (per week) | 50 |
 
@@ -30,7 +30,8 @@ Points are computed from each reader's reading history, so they're the same on e
 |---|---|---|
 | Website | Vercel (static Vite build) | Free tier |
 | Accounts, projects, progress, private PDFs | Supabase (email sign-in links, Postgres with row-level security, Storage) | Free tier to start |
-| Quizzes and PDF reading | Vercel functions in `api/`, calling the Anthropic API with your key | Pay per new quiz |
+| Reading DOIs from PDFs | Vercel function `api/pdf-meta.js` with Crossref | Free |
+| Quizzes (optional) | Vercel functions in `api/`, calling the Anthropic API with your key | Pay per new quiz |
 
 ```
 index.html, src/        the app (dashboard, projects, ring maps, quizzes)
@@ -59,13 +60,15 @@ scripts/                regenerate the example project from scripts/catalogue-so
 3. In **Authentication → URL Configuration**, set **Site URL** to your website's address and add it under **Redirect URLs** (do this again once you have your Vercel URL or custom domain).
 4. In **Project Settings → API**, copy the Project URL, the `anon` public key and the `service_role` key.
 
-### 2. Anthropic
-Create an API key at [console.anthropic.com](https://console.anthropic.com) and set a monthly spend limit.
-
-### 3. Vercel
+### 2. Vercel
 1. Import this repository at [vercel.com/new](https://vercel.com/new). Vercel detects Vite.
-2. Add the environment variables from `.env.example`. Only the two `VITE_` values reach the browser; the service-role key and the Anthropic key are read only by the functions in `api/`. Never give those two a `VITE_` prefix.
+2. Add `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (see `.env.example`). Only the two `VITE_` values reach the browser. Never give the service-role key a `VITE_` prefix.
 3. Deploy, then put the URL into Supabase's Site URL (step 1.3).
+
+### 3. Quizzes (optional, later)
+Quizzes are off until you turn them on. With them off, the site hides every quiz button and badge, and the quiz functions refuse requests. To turn them on:
+1. Create an API key at [console.anthropic.com](https://console.anthropic.com) and set a monthly spend limit.
+2. In Vercel, add `ANTHROPIC_API_KEY` and `VITE_QUIZZES=true`, then redeploy (the `VITE_` value is read at build time).
 
 ## Run locally
 
@@ -75,7 +78,7 @@ cp .env.example .env    # fill in the values
 npx vercel dev          # site + api functions
 ```
 
-`npm run dev` serves only the site (no quizzes or PDF reading). Without any Supabase values the site runs in guest mode: the example project works and progress stays in the browser.
+`npm run dev` serves only the site (no PDF reading or quizzes). Without any Supabase values the site runs in guest mode: the example project works and progress stays in the browser.
 
 ## Editing the example project
 
