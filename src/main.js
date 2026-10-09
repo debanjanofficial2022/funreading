@@ -49,7 +49,7 @@ function regame(announce = true) {
 function drawTop() {
   const g = A.game, el = $("topright");
   const pill = g ? `<a class="xp-pill" href="#/" title="Your level and scholar points">Lv ${g.level.n}<span class="lvl-name"> · ${esc(g.level.name)}</span> · <b>${g.xp} XP</b></a>` : "";
-  el.innerHTML = pill + (sb ? (signedIn() ? `<button class="btn sm" data-act="signout">Sign out</button>` : `<button class="btn sm primary" data-act="signin">Sign in</button>`) : "");
+  el.innerHTML = pill;
 }
 
 /* ============ data ============ */
@@ -174,22 +174,22 @@ function projectCard(p) {
 const shownBadges = g => QUIZ ? g.badges : g.badges.filter(b => !b.id.startsWith("quiz"));
 function renderHome() {
   const g = A.game;
-  const guestNote = !sb ? `<p class="note">Accounts aren't configured on this copy of the site, so your progress is saved in this browser only.</p>`
-    : !signedIn() ? `<p class="note">You're reading as a guest, so progress is saved in this browser only. <button class="linkbtn" data-act="signin">Sign in</button> to create your own projects${QUIZ ? ", take quizzes" : ""} and keep your progress everywhere.</p>` : "";
-  const landing = signedIn() ? "" : `
+  const guestNote = signedIn() ? `<p class="note">No account needed: your projects and progress are tied to this browser. Clearing this site's data or switching browsers starts you fresh.</p>`
+    : `<p class="note">${sb ? "Couldn't set up storage for your projects just now, so only the example project is available and progress is saved in this browser. Reload to try again." : "This copy of the site has no database, so only the example project is available and progress is saved in this browser."}</p>`;
+  const landing = A.projects.length ? "" : `
     <section class="landing">
       <div>
         <div class="eyebrow">Literature, gamified</div>
         <h1>Turn your reading list into a <em>game</em></h1>
         <p class="lede">Build a project for any topic, add papers by DOI or PDF, and work through them ring by ring. Set daily and weekly goals, keep your streak, ${QUIZ ? "pass quizzes on what you read, " : ""}and earn scholar points as you level up from curious reader to distinguished professor.</p>
-        <ol class="steps"><li><span>Open the example project, <b>Electrocatalysis Must-Reads</b>, to see how it works.</span></li><li><span>Sign in and start your own project. Paste DOIs or drop in PDFs.</span></li><li><span>Tick papers as you read them${QUIZ ? ", then prove it with a quiz" : " and rate how well you understood each one"}.</span></li></ol>
-        <div class="cta"><a class="btn primary" href="#/p/${EX}">Open the example project</a>${sb ? `<button class="btn" data-act="signin">Sign in or create an account</button>` : ""}</div>
+        <ol class="steps"><li><span>Open the example project, <b>Electrocatalysis Must-Reads</b>, to see how it works.</span></li><li><span>Start your own project below: search for papers, paste DOIs or drop in PDFs.</span></li><li><span>Tick papers as you read them${QUIZ ? ", then prove it with a quiz" : " and rate how well you understood each one"}.</span></li></ol>
+        <div class="cta"><a class="btn primary" href="#/p/${EX}">Open the example project</a>${signedIn() ? `<a class="btn" href="#/" data-act="jump" data-id="newproj">Start a project</a>` : ""}</div>
       </div>
       <div class="ringmap">${ringMap(EXAMPLE_PROJECT, EXAMPLE_PAPERS)}</div>
     </section>`;
   const lv = g.level, toNext = lv.next ? lv.next.xp - g.xp : 0, pct = lv.next ? Math.round(100 * (g.xp - lv.floor) / (lv.next.xp - lv.floor)) : 100;
   app.innerHTML = `${landing}
-    <div class="section-title"><div><div class="eyebrow">${signedIn() ? "Welcome back" : "Your progress"}</div><h2>Scholar dashboard</h2></div>
+    <div class="section-title"><div><div class="eyebrow">Your progress</div><h2>Scholar dashboard</h2></div>
       <div class="goals"><label for="goal-d">Daily goal<input type="number" id="goal-d" min="1" max="50" value="${A.profile.daily_goal}"></label><label for="goal-w">Weekly goal<input type="number" id="goal-w" min="1" max="200" value="${A.profile.weekly_goal}"></label><span>papers</span></div></div>
     ${guestNote}
     <div class="grid g4">
@@ -210,7 +210,7 @@ function renderHome() {
           <label for="np-secs">Sections, one per line<textarea id="np-secs" rows="3" placeholder="Foundations&#10;Key papers&#10;Recent work"></textarea></label>
           ${AI ? `<label class="note" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="np-ai" style="width:auto;margin:0" checked> Have Claude suggest rings and papers from the name and description</label>` : ""}
           <button class="btn primary" type="submit">Create project</button></form></div>`
-      : sb ? `<div class="card pcard newproj"><div class="eyebrow">New project</div><h3>Start your own</h3><p>Sign in to create projects, add papers by DOI or PDF${QUIZ ? ", and take quizzes" : ""}.</p><button class="btn primary" data-act="signin">Sign in</button></div>` : ""}
+      : ""}
     </div>
 
     ${(() => { const bs = shownBadges(g); return `<div class="section-title"><div><div class="eyebrow">Achievements</div><h2>Badges</h2></div><span class="note">${bs.filter(b => b.earned).length} of ${bs.length} earned</span></div>
@@ -268,7 +268,7 @@ async function renderProject(id) {
       <div class="cta" style="margin-top:4px"><button class="btn primary" data-act="save-proj">Save changes</button>
       ${v.confirm === "delproj" ? `<span class="note">Delete this project and all its papers?</span><button class="btn danger" data-act="del-proj-yes">Delete project</button><button class="btn" data-act="cancel">Cancel</button>` : `<button class="linkbtn" data-act="del-proj">Delete project</button>`}</div></div></details>` : "";
 
-  const banner = proj.is_template ? `<div class="banner"><span>This is the example project. Read along and track your progress here, or make your own copy to add, move and remove papers.</span>${signedIn() ? `<button class="btn primary" data-act="copy-ex">Make my own copy</button>` : sb ? `<button class="btn" data-act="signin">Sign in to make a copy</button>` : ""}</div>` : "";
+  const banner = proj.is_template ? `<div class="banner"><span>This is the example project. Read along and track your progress here, or make your own copy to add, move and remove papers.</span>${signedIn() ? `<button class="btn primary" data-act="copy-ex">Make my own copy</button>` : ""}</div>` : "";
   const firstPass = fp.length ? `<div class="card firstpass"><div class="eyebrow">Start here</div><h3>First pass, in order</h3><ol>${fp.map(pid => { const p = papers.find(x => x.id === pid); return p ? `<li${A.reads.has(p.id) ? ' class="done"' : ""}><a href="#p-${p.id}" data-act="jump" data-id="p-${p.id}">${esc(p.title)}</a></li>` : ""; }).join("")}</ol></div>` : "";
 
   let body = "";
@@ -308,7 +308,7 @@ function paperRow(p, proj, own, secOptions) {
   if (!QUIZ) quiz = "";
   else if (r && conf === "high") {
     if (!sb) quiz = `<span class="note">Quizzes need an account on a configured site.</span>`;
-    else if (!signedIn()) quiz = `<button class="linkbtn" data-act="signin">Sign in to take the quiz</button>`;
+    else if (!signedIn()) quiz = "";
     else if (r.quiz_passed) quiz = `<span class="passed">Quiz passed · best ${r.quiz_best}/${r.quiz_n}</span><button class="btn sm" data-act="quiz" data-id="${p.id}" data-fresh="1">Retake</button>`;
     else quiz = `<button class="btn sm primary" data-act="quiz" data-id="${p.id}">${r.quiz_attempts ? `Try again (best ${r.quiz_best}/${r.quiz_n})` : `Take the quiz · +${XP.quiz} XP`}</button>`;
   } else if (r && conf) quiz = `<span class="note">Mark yourself confident when you're ready for the quiz.</span>`;
@@ -526,7 +526,7 @@ async function runRings(proj) {
   if (my !== ringsToken) return;
   go.disabled = false;
   const d = res.data || {};
-  if (res.status === 401) { out.innerHTML = `<p>Your sign-in has expired. Sign in again.</p>`; return; }
+  if (res.status === 401) { out.innerHTML = `<p>Your session expired. Reload the page and try again.</p>`; return; }
   if (res.status === 429) { out.innerHTML = `<p>${d.reason === "global" ? "The site has reached today's limit for Claude requests. Please try again tomorrow." : "You've used today's Claude requests. They reset tomorrow."}</p>`; return; }
   if (!res.ok) { out.innerHTML = `<p>${esc(d.error || "Couldn't build rings this time.")}</p>`; return; }
   rdlg._preview = d;
@@ -612,7 +612,7 @@ async function openQuiz(paper, fresh, exclude) {
   try { res = await api("/api/quiz", { paperId: paper.id, fresh: !!fresh, exclude: exclude || null }); } catch { res = { ok: false, status: 0, data: {} }; }
   if (my !== quizToken) return;
   const d = res.data || {};
-  if (res.status === 401) { body.innerHTML = `<p>Your sign-in has expired. Sign in again to take quizzes.</p>`; return; }
+  if (res.status === 401) { body.innerHTML = `<p>Your session expired. Reload the page and try again.</p>`; return; }
   if (res.status === 429) { body.innerHTML = `<p>${d.reason === "global" ? "The site has reached today's limit for new quizzes. Please try again tomorrow." : "You've reached today's limit for new quizzes. Quizzes that already exist still work; new ones unlock tomorrow."}</p>`; return; }
   if (d.unknown) { body.innerHTML = `<p>Claude doesn't know this paper well enough to quiz you fairly.${paper.pdf_path ? "" : " Attach the PDF and try again: quizzes from your PDF work for any paper."}</p>`; return; }
   const qs = d.questions || [];
@@ -643,50 +643,12 @@ async function openQuiz(paper, fresh, exclude) {
   };
 }
 
-/* ============ sign-in ============ */
-const sdlg = $("signin");
-$("signin-close").onclick = () => sdlg.close();
-$("signin-form").onsubmit = async e => {
-  e.preventDefault();
-  const email = $("signin-email").value.trim(), msg = $("signin-msg"), btn = e.target.querySelector("button");
-  btn.disabled = true;
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-  btn.disabled = false;
-  msg.textContent = error ? "Couldn't send the link: " + error.message : `Check ${email} for your sign-in link. You can close this.`;
-};
-// Sign in with Google or GitHub. Only providers switched on in Supabase are shown; with none, an email link is offered instead.
-const PROVIDERS = [["google", "Continue with Google"], ["github", "Continue with GitHub"]];
-let enabledProviders = null;
-async function openSignin() {
-  $("signin-msg").textContent = "";
-  sdlg.showModal();
-  if (!enabledProviders) {
-    try {
-      const r = await fetch(SUPA_URL + "/auth/v1/settings", { headers: { apikey: SUPA_KEY } });
-      const ext = (await r.json()).external || {};
-      enabledProviders = PROVIDERS.filter(([k]) => ext[k]);
-    } catch { enabledProviders = []; }
-  }
-  const box = $("signin-providers");
-  box.innerHTML = enabledProviders.map(([k, l]) => `<button class="btn primary oauth" type="button" data-provider="${k}">${l}</button>`).join("");
-  $("signin-form").hidden = enabledProviders.length > 0;
-  if (!enabledProviders.length) $("signin-msg").textContent = "No password needed. We'll email you a link that signs you in.";
-  box.querySelectorAll("[data-provider]").forEach(b => b.onclick = async () => {
-    b.disabled = true;
-    try { sessionStorage.setItem("fr-return", location.hash); } catch {}
-    const { error } = await sb.auth.signInWithOAuth({ provider: b.dataset.provider, options: { redirectTo: location.origin + location.pathname } });
-    if (error) { b.disabled = false; $("signin-msg").textContent = "Couldn't start sign-in: " + error.message; }
-  });
-}
-
 /* ============ events ============ */
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id, proj = projectById(route().id);
   const paper = id && proj && A.papers[proj.id] ? A.papers[proj.id].find(p => p.id === id) : null;
   if (act === "read" || act === "move") return; // handled on change
-  if (act === "signin") { if (sb) openSignin(); return; }
-  if (act === "signout") { await sb.auth.signOut(); return; }
   if (act === "jump") { e.preventDefault(); const el = $(b.dataset.id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   if (act === "conf" && paper) return setConfidence(paper, b.dataset.v);
   if (act === "quiz" && paper && QUIZ) return openQuiz(paper, !!b.dataset.fresh);
@@ -782,25 +744,15 @@ window.addEventListener("hashchange", () => { A.view.confirm = null; A.view.q = 
 async function start() {
   loadGuest(); regame(false);
   if (sb) {
-    const { data } = await sb.auth.getSession();
-    A.session = data.session;
-    // back from Google/GitHub: drop the ?code from the address and return to the page the reader was on
-    if (location.search.includes("code=") || location.search.includes("error")) {
-      let back = ""; try { back = sessionStorage.getItem("fr-return") || ""; sessionStorage.removeItem("fr-return"); } catch {}
-      history.replaceState(null, "", location.pathname + (back || location.hash));
+    // No sign-in: each browser gets its own anonymous account the first time it opens the site.
+    let { data } = await sb.auth.getSession();
+    if (!data.session) {
+      const r = await sb.auth.signInAnonymously().catch(() => ({ data: {} }));
+      data = { session: (r.data && r.data.session) || null };
     }
-    if (A.session) { try { await loadAccount(); } catch { toast("Couldn't load your account. Showing what's saved in this browser."); } }
-    sb.auth.onAuthStateChange(async (event, s) => {
-      if (event === "SIGNED_IN" && (!A.session || A.session.user.id !== s.user.id)) {
-        A.session = s; if (sdlg.open) sdlg.close();
-        try { await loadAccount(); } catch {}
-        regame(false); toast("Signed in. Your progress now saves to your account."); render();
-      } else if (event === "SIGNED_OUT") {
-        A.session = null; A.projects = []; A.papers = { [EX]: EXAMPLE_PAPERS };
-        A.index = new Map(EXAMPLE_PAPERS.map(p => [p.id, { project_id: EX, section: p.section }]));
-        loadGuest(); regame(false); location.hash = "#/"; render();
-      } else if (s) A.session = s; // token refresh
-    });
+    A.session = data.session;
+    if (A.session) { try { await loadAccount(); } catch { toast("Couldn't load your projects. Reload to try again."); } }
+    sb.auth.onAuthStateChange((event, s) => { if (s) A.session = s; }); // token refresh
   }
   A.ready = true; regame(false); render();
   if (sb) {
