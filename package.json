@@ -1,0 +1,22 @@
+{
+  "name": "reading-rings",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Turn your reading list into a game: projects of papers, daily and weekly goals, quizzes and scholar points.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.45.4",
+    "unpdf": "^0.12.1"
+  },
+  "devDependencies": {
+    "vite": "5.4.8"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
